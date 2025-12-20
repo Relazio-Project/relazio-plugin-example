@@ -118,3 +118,26 @@ export interface DeepScanResult {
   associatedDomains?: string[];
 }
 
+// Registration & Multi-tenant types
+export interface RegistrationRequest {
+  organizationId: string;
+  organizationName?: string;
+  platformUrl: string;
+  platformVersion?: string;
+}
+
+export interface RegistrationResponse {
+  webhookSecret: string;
+  pluginId: string;
+  version: string;
+  message: string;
+}
+
+export interface Installation {
+  organizationId: string;
+  webhookSecret: string;
+  platformUrl: string;
+  installedAt: Date;
+  lastUsed?: Date;
+}
+
