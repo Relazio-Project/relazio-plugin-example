@@ -1,360 +1,399 @@
 # Relazio Plugin Example
 
-> Example external plugin for Relazio platform - IP Lookup Plugin
+> **🎉 Aggiornato con SDK v1.0 e Multi-Tenant Support**
 
-This is a complete, production-ready example of how to create an external plugin for [Relazio](https://github.com/relazio/relazio).
+Plugin di esempio per la piattaforma Relazio che dimostra l'uso dell'SDK ufficiale con supporto multi-tenant completo.
 
-**Features demonstrated:**
-- ✅ Synchronous transforms (< 30s)
-- ✅ Asynchronous transforms (minutes/hours)
-- ✅ HMAC webhook signatures
-- ✅ Job progress tracking
-- ✅ Manifest JSON validation
-- ✅ Error handling
-- ✅ HTTPS support
+## 🚀 Caratteristiche
 
----
+- ✅ **Multi-Tenant**: Supporta multiple organizzazioni con secret univoci
+- ✅ **Transform Sincrone**: Risposta immediata (< 5 secondi)
+- ✅ **Transform Asincrone**: Job con progresso per operazioni lunghe
+- ✅ **Auto-Registration**: Endpoint `/register` e `/unregister` automatici
+- ✅ **HMAC Signature**: Webhook firmati per sicurezza
+- ✅ **SDK-Based**: Usa `@relazio/plugin-sdk` ufficiale
 
-## 📋 Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- npm or pnpm
-- SSL certificate (for production) or ngrok (for development)
-
-### Installation
+## 📦 Installazione
 
 ```bash
-# Clone the repository
-git clone https://github.com/rstlgu/relazio-plugin-example.git
-cd relazio-plugin-example
-
-# Install dependencies
+# Installa dipendenze
 npm install
 
-# Copy environment variables
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
-```
-
-### Configuration
-
-Edit `.env`:
-
-```env
-PORT=3000
-WEBHOOK_SECRET=your-webhook-secret-from-relazio
-NODE_ENV=development
-
-# Optional: API keys for external services
-IPINFO_API_KEY=your-ipinfo-key
-```
-
-### Running the Plugin
-
-#### Development (with ngrok)
-
-```bash
-# Terminal 1: Start the server
-npm run dev
-
-# Terminal 2: Start ngrok
-ngrok http 3000
-```
-
-Copy the ngrok HTTPS URL (e.g., `https://abc123.ngrok.io`) and use it in your manifest.
-
-#### Production
-
-```bash
 # Build
 npm run build
 
-# Start
+# Avvia in sviluppo (con auto-reload)
+npm run dev
+
+# Avvia in produzione
 npm start
 ```
 
----
+## 🔧 Configurazione
 
-## 🔌 Installing in Relazio
+### Variabili d'Ambiente
 
-1. **Start your plugin server** (with HTTPS)
-2. **Get your manifest URL**: `https://your-domain.com/manifest.json`
-3. **In Relazio**:
-   - Go to Dashboard → Plugins → Custom tab
-   - Click "Add External Plugin"
-   - Enter your manifest URL
-   - Copy the webhook secret
-4. **Update your `.env`** with the webhook secret
-5. **Restart your plugin server**
+Crea un file `.env`:
 
----
+```env
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=development
+```
 
-## 📄 Manifest Structure
+**Nota**: Con il multi-tenant, NON serve più `WEBHOOK_SECRET` nel `.env`. Ogni organizzazione riceve automaticamente il proprio secret durante l'installazione.
 
-The plugin exposes a manifest at `/manifest.json`:
+## 🏗️ Architettura
 
-```json
-{
-  "manifestVersion": "1.0",
-  "plugin": {
-    "id": "ip-lookup-example",
-    "name": "IP Lookup Example",
-    "version": "1.0.0",
-    "author": "Your Name",
-    "category": "network",
-    "capabilities": {
-      "inputTypes": ["ip"],
-      "outputTypes": ["location", "note", "organization"],
-      "supportsAsync": true
-    },
-    "transforms": [
-      {
-        "id": "lookup-ip",
-        "name": "IP Information (Sync)",
-        "inputType": "ip",
-        "outputTypes": ["location", "note"],
-        "endpoint": "https://your-domain.com/transform/lookup-ip",
-        "method": "POST",
-        "async": false
-      },
-      {
-        "id": "scan-ip",
-        "name": "Deep IP Scan (Async)",
-        "inputType": "ip",
-        "outputTypes": ["note", "organization"],
-        "endpoint": "https://your-domain.com/transform/scan-ip",
-        "method": "POST",
-        "async": true
-      }
-    ]
+### Prima (Vecchio Codice)
+```
+❌ Express manuale
+❌ Gestione manuale di /register
+❌ Un solo WEBHOOK_SECRET condiviso
+❌ Logica custom per webhook
+```
+
+### Dopo (Con SDK)
+```
+✅ SDK gestisce tutto automaticamente
+✅ /register e /unregister inclusi
+✅ Secret univoco per organizzazione
+✅ HMAC automatico per webhook
+✅ Registry integrato (in-memory o custom)
+```
+
+## 📝 Esempio d'Uso
+
+### Codice Minimo
+
+```typescript
+import { RelazioPlugin } from '@relazio/plugin-sdk';
+
+const plugin = new RelazioPlugin({
+  id: 'my-plugin',
+  name: 'My Plugin',
+  version: '1.0.0',
+  author: 'Me',
+  description: 'Example plugin',
+  category: 'network',
+});
+
+// Transform sincrona
+plugin.transform({
+  id: 'my-transform',
+  name: 'My Transform',
+  description: 'Does something cool',
+  inputTypes: ['ip'],
+  outputTypes: ['domain'],
+  async: false,
+  
+  async handler(input, config) {
+    console.log('Organization:', input.organizationId);
+    
+    return {
+      entities: [
+        {
+          type: 'domain',
+          value: 'example.com',
+          properties: {}
+        }
+      ],
+      edges: []
+    };
   }
-}
-```
+});
 
----
-
-## 🔄 Transform Types
-
-### Synchronous Transform
-
-Returns results immediately (< 30s):
-
-```typescript
-POST /transform/lookup-ip
-{
-  "transformId": "lookup-ip",
-  "input": {
-    "entity": { "type": "ip", "value": "8.8.8.8" },
-    "config": {}
-  },
-  "callbackUrl": "https://relazio.io/api/webhooks/transforms/job-123"
-}
-
-Response:
-{
-  "async": false,
-  "result": {
-    "entities": [...],
-    "edges": [...]
+// Transform asincrona con progresso
+plugin.asyncTransform({
+  id: 'long-task',
+  name: 'Long Task',
+  description: 'Takes a while',
+  inputTypes: ['ip'],
+  outputTypes: ['note'],
+  async: true,
+  estimatedTime: 60,
+  
+  async handler(input, config, job) {
+    await job.updateProgress(25, 'Step 1...');
+    // ... do work ...
+    
+    await job.updateProgress(50, 'Step 2...');
+    // ... more work ...
+    
+    await job.updateProgress(100, 'Done!');
+    
+    return { entities: [], edges: [] };
   }
-}
+});
+
+// Avvia con multi-tenant
+await plugin.start({
+  port: 3000,
+  multiTenant: true
+});
 ```
 
-### Asynchronous Transform
+## 🔐 Flusso Multi-Tenant
 
-Accepts job and processes in background:
-
-```typescript
-POST /transform/scan-ip
-{
-  "transformId": "scan-ip",
-  "input": {
-    "entity": { "type": "ip", "value": "8.8.8.8" },
-    "config": {}
-  },
-  "callbackUrl": "https://relazio.io/api/webhooks/transforms/job-123"
-}
-
-Response:
-{
-  "async": true,
-  "jobId": "job-abc-123",
-  "estimatedTime": 300
-}
-
-// Later, sends webhook to callbackUrl:
-POST https://relazio.io/api/webhooks/transforms/job-123
-Headers:
-  X-Plugin-Signature: sha256=abc123...
-Body:
-{
-  "jobId": "job-123",
-  "status": "completed",
-  "result": { "entities": [...], "edges": [...] }
-}
-```
-
----
-
-## 🔐 Security
-
-### HMAC Signature
-
-All webhooks are signed with HMAC-SHA256:
-
-```typescript
-import crypto from 'crypto';
-
-function signWebhook(payload: string, secret: string): string {
-  return crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
-}
-
-// Usage
-const body = JSON.stringify(webhookPayload);
-const signature = signWebhook(body, process.env.WEBHOOK_SECRET);
-headers['X-Plugin-Signature'] = `sha256=${signature}`;
-```
-
-Relazio verifies the signature before processing webhooks.
-
----
-
-## 📁 Project Structure
+### 1. Installazione
 
 ```
-relazio-plugin-example/
-├── src/
-│   ├── index.ts              # Main server
-│   ├── manifest.ts           # Manifest generator
-│   ├── transforms/
-│   │   ├── lookup-ip.ts      # Sync transform
-│   │   └── scan-ip.ts        # Async transform
-│   ├── utils/
-│   │   ├── hmac.ts           # HMAC signature
-│   │   └── webhook.ts        # Webhook sender
-│   └── types.ts              # TypeScript types
-├── manifest.json             # Generated manifest
-├── package.json
-├── tsconfig.json
-├── .env.example
-├── Dockerfile                # Optional Docker support
-└── README.md
+User → Inserisce manifest URL in Relazio
+  ↓
+Relazio → GET http://plugin:3000/manifest.json
+Relazio → POST http://plugin:3000/register
+          {
+            organizationId: "org-123",
+            organizationName: "ACME Corp",
+            platformUrl: "https://relazio.io"
+          }
+  ↓
+Plugin SDK → Genera secret: whs_abc123...
+Plugin SDK → Salva: org-123 → whs_abc123...
+Plugin SDK → Risponde: { webhookSecret: "whs_abc123..." }
+  ↓
+Relazio → Salva secret nel DB
+✅ Plugin installato!
 ```
 
----
+### 2. Esecuzione Transform
+
+```
+User → Esegue transform in Relazio
+  ↓
+Relazio → POST http://plugin:3000/scan-ip
+          Header: X-Organization-Id: org-123
+          Body: { input: {...}, callbackUrl: "..." }
+  ↓
+Plugin SDK → Legge org-123 dall'header
+Plugin SDK → Recupera secret per org-123
+Plugin SDK → Esegue transform
+Plugin SDK → Firma webhook con secret di org-123
+Plugin SDK → POST callbackUrl (con HMAC signature)
+  ↓
+Relazio → Verifica HMAC con secret di org-123
+✅ Risultati accettati!
+```
+
+### 3. Disinstallazione
+
+```
+User → Disinstalla plugin
+  ↓
+Relazio → POST http://plugin:3000/unregister
+          { organizationId: "org-123" }
+  ↓
+Plugin SDK → Rimuove registrazione org-123
+Plugin SDK → Risponde: { success: true }
+  ↓
+Relazio → Elimina dal DB
+✅ Plugin disinstallato!
+```
 
 ## 🧪 Testing
 
+### Test Locale
+
 ```bash
-# Run tests
-npm test
+# Avvia plugin
+npm run dev
 
-# Test manifest validation
-npm run validate-manifest
+# In altro terminale, testa il manifest
+curl http://localhost:3000/manifest.json
 
-# Test HMAC signature
-npm run test-hmac
+# Simula registrazione
+curl -X POST http://localhost:3000/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organizationId": "test-org-123",
+    "organizationName": "Test Org",
+    "platformUrl": "http://localhost:3000"
+  }'
+
+# Output:
+# {
+#   "webhookSecret": "whs_a1b2c3...",
+#   "pluginId": "ip-lookup-plugin",
+#   "pluginVersion": "1.0.0",
+#   "message": "Organization registered successfully"
+# }
 ```
 
-### Manual Testing
+### Test Transform
 
 ```bash
-# Test sync transform
-curl -X POST http://localhost:3000/transform/lookup-ip \
+# Transform sincrona
+curl -X POST http://localhost:3000/lookup-ip \
   -H "Content-Type: application/json" \
+  -H "X-Organization-Id: test-org-123" \
   -d '{
     "transformId": "lookup-ip",
     "input": {
-      "entity": {"type": "ip", "value": "8.8.8.8"},
-      "config": {}
-    },
-    "callbackUrl": "https://webhook.site/your-unique-url"
+      "entity": {
+        "type": "ip",
+        "value": "8.8.8.8"
+      }
+    }
   }'
 
-# Test async transform
-curl -X POST http://localhost:3000/transform/scan-ip \
+# Transform asincrona
+curl -X POST http://localhost:3000/scan-ip \
   -H "Content-Type: application/json" \
+  -H "X-Organization-Id: test-org-123" \
   -d '{
     "transformId": "scan-ip",
     "input": {
-      "entity": {"type": "ip", "value": "8.8.8.8"},
-      "config": {}
+      "entity": {
+        "type": "ip",
+        "value": "8.8.8.8"
+      }
     },
-    "callbackUrl": "https://webhook.site/your-unique-url"
+    "callbackUrl": "http://localhost:3000/webhook-test"
   }'
+
+# Output:
+# {
+#   "async": true,
+#   "jobId": "ip-lookup-plugin-scan-ip-1234567890",
+#   "estimatedTime": 120
+# }
 ```
 
----
+## 📚 Transforms Disponibili
+
+### 1. `lookup-ip` (Sincrona)
+
+**Input**: IP address  
+**Output**: Location, Organization, Note  
+**Tempo**: < 5 secondi
+
+Recupera informazioni base sull'IP (location, ISP, ASN).
+
+### 2. `scan-ip` (Asincrona)
+
+**Input**: IP address  
+**Output**: Domains, Note  
+**Tempo**: ~2 minuti
+
+Analisi approfondita:
+- Reverse DNS
+- Port scan
+- Reputation check
+- Associated domains
+
+## 🔄 Migrazione dal Vecchio Codice
+
+### Prima
+
+```typescript
+// express manuale
+app.post('/register', async (req, res) => {
+  // implementazione manuale...
+});
+
+app.post('/transform/lookup-ip', async (req, res) => {
+  // logica custom...
+  const secret = process.env.WEBHOOK_SECRET; // ❌ Un solo secret
+  // firma webhook manualmente...
+});
+```
+
+### Dopo
+
+```typescript
+import { RelazioPlugin } from '@relazio/plugin-sdk';
+
+const plugin = new RelazioPlugin({ /* config */ });
+
+plugin.transform({
+  id: 'lookup-ip',
+  async handler(input, config) {
+    // ✅ organizationId disponibile in input
+    // ✅ SDK gestisce HMAC automaticamente
+    return { entities: [], edges: [] };
+  }
+});
+
+await plugin.start({ multiTenant: true });
+// ✅ /register incluso automaticamente
+// ✅ Secret univoco per org
+```
 
 ## 🚀 Deployment
 
-### Using Docker
+### Docker
 
-```bash
-# Build image
-docker build -t relazio-plugin-example .
-
-# Run container
-docker run -p 3000:3000 \
-  -e WEBHOOK_SECRET=your-secret \
-  relazio-plugin-example
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --production
+COPY dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/index-new.js"]
 ```
 
-### Using PM2
-
 ```bash
-# Install PM2
-npm install -g pm2
-
-# Start
-pm2 start npm --name "relazio-plugin" -- start
-
-# Monitor
-pm2 monit
+docker build -t my-plugin .
+docker run -p 3000:3000 my-plugin
 ```
 
-### Using systemd
+### Storage Persistente (Produzione)
 
-See `deploy/relazio-plugin.service` for systemd configuration.
+Per produzione, usa storage persistente invece di in-memory:
 
----
+```typescript
+import { InstallationRegistry } from '@relazio/plugin-sdk';
+import Redis from 'ioredis';
 
-## 📚 Documentation
+// Custom storage con Redis
+class RedisStorage implements InstallationStorage {
+  // ... implementazione ...
+}
 
-- **Relazio Documentation**: [docs/plugins/](https://github.com/relazio/relazio/tree/main/docs/plugins)
-- **SDK Reference**: [SDK.md](https://github.com/relazio/relazio/blob/main/docs/plugins/SDK.md)
-- **Architecture**: [EXTERNAL_PLUGINS.md](https://github.com/relazio/relazio/blob/main/docs/plugins/EXTERNAL_PLUGINS.md)
+const registry = new InstallationRegistry(
+  'my-plugin',
+  '1.0.0',
+  new RedisStorage()
+);
 
----
+plugin.enableMultiTenant(registry);
+```
 
-## 🤝 Contributing
+## 📖 Documentazione
 
-Contributions welcome! This is an example plugin, so feel free to fork and adapt.
+- [SDK Documentation](../relazio-plugin-sdk/README.md)
+- [Multi-Tenant Guide](../relazio-plugin-sdk/docs/MULTI_TENANT.md)
+- [Plugin System Architecture](../relazio/docs/plugins/EXTERNAL_PLUGINS.md)
 
----
+## 🐛 Troubleshooting
 
-## 📄 License
+### Plugin non riceve organizationId
 
-MIT License - see LICENSE file
+**Problema**: `input.organizationId` è `undefined`
 
----
+**Soluzione**: Verifica che Relazio invii l'header `X-Organization-Id`
 
-## 🔗 Links
+### Webhook fallisce con errore HMAC
 
-- **Relazio Platform**: https://github.com/relazio/relazio
-- **Plugin SDK**: https://github.com/relazio/plugin-sdk (coming Q1 2026)
-- **Issues**: https://github.com/rstlgu/relazio-plugin-example/issues
+**Problema**: Signature non valida
 
----
+**Causa**: Ogni org ha un secret diverso. Verifica che:
+1. Il plugin usi il secret dell'org corretta
+2. Relazio verifichi con lo stesso secret
 
-**Made with ❤️ for the Relazio community**
+### Registrazione fallisce
 
-*"Rivela le connessioni nascoste"*
+**Problema**: POST /register ritorna errore
+
+**Debug**:
+```typescript
+const registry = plugin.getRegistry();
+const stats = await registry.getStats();
+console.log('Installazioni:', stats);
+```
+
+## 📝 License
+
+MIT - Vedi [LICENSE](./LICENSE)
 
