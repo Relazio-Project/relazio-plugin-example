@@ -240,7 +240,7 @@ plugin.asyncTransform({
 // Start Server with Multi-Tenant Support
 // ============================================
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
 (async () => {
