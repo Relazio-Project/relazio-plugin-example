@@ -2,11 +2,11 @@
  * Relazio Plugin Example - Using SDK with Multi-Tenant Support
  * 
  * This example demonstrates how to build a plugin using the official SDK
- * with full multi-tenant support via the InstallationRegistry.
+ * with createEntity() and ResultBuilder for scalable entity creation.
  */
 
 import dotenv from 'dotenv';
-import { RelazioPlugin } from '@relazio/plugin-sdk';
+import { RelazioPlugin, createEntity, ResultBuilder } from '@relazio/plugin-sdk';
 import type { TransformInput, JobContext } from '@relazio/plugin-sdk';
 
 // Load environment variables
@@ -45,51 +45,41 @@ plugin.transform({
     // Mock IP lookup (in production, use real API)
     const ipInfo = await mockIpLookup(ip);
 
-    const results = {
-      entities: [] as any[],
-      edges: [] as any[],
-    };
+    const builder = new ResultBuilder(input);
 
-    // Add location entity
+    // Add location entity using createEntity
     if (ipInfo.location) {
-      const locationId = `location-${ipInfo.location.city}`;
-      results.entities.push({
-        type: 'location',
-        value: `${ipInfo.location.city}, ${ipInfo.location.country}`,
-        properties: {
+      const location = createEntity('location', `${ipInfo.location.city}, ${ipInfo.location.country}`, {
+        label: ipInfo.location.city,
+        metadata: {
           city: ipInfo.location.city,
           country: ipInfo.location.country,
           latitude: ipInfo.location.lat,
           longitude: ipInfo.location.lon,
         },
       });
-      results.edges.push({
-        from: ip,
-        to: locationId,
-        label: 'located_in',
+      
+      builder.addEntity(location, 'located in', {
+        relationship: 'geolocation',
       });
     }
 
-    // Add ISP/Organization entity
+    // Add ISP/Organization entity using createEntity
     if (ipInfo.isp) {
-      const ispId = `org-${ipInfo.isp.replace(/\s+/g, '-').toLowerCase()}`;
-      results.entities.push({
-        type: 'organization',
-        value: ipInfo.isp,
-        properties: {
+      const organization = createEntity('organization', ipInfo.isp, {
+        label: ipInfo.isp,
+        metadata: {
           type: 'isp',
           asn: ipInfo.asn,
         },
       });
-      results.edges.push({
-        from: ip,
-        to: ispId,
-        label: 'assigned_by',
+      
+      builder.addEntity(organization, 'assigned by', {
+        relationship: 'isp_assignment',
       });
     }
 
-    // Add informational note
-    const noteId = `note-${ip}`;
+    // Add informational note using createEntity
     const content = `## IP Information\n\n` +
       `**IP Address**: ${ip}\n` +
       `**Location**: ${ipInfo.location?.city}, ${ipInfo.location?.country}\n` +
@@ -98,21 +88,21 @@ plugin.transform({
       `**Type**: ${ipInfo.type}\n\n` +
       `*Retrieved by IP Lookup Plugin*`;
 
-    results.entities.push({
-      type: 'note',
-      value: `IP Info: ${ip}`,
-      properties: {
+    const note = createEntity('note', `IP Info: ${ip}`, {
+      label: 'IP Information',
+      metadata: {
         content,
         tags: ['ip-info', 'network'],
       },
     });
-    results.edges.push({
-      from: ip,
-      to: noteId,
-      label: 'has_info',
+    
+    builder.addEntity(note, 'has info', {
+      relationship: 'documentation',
     });
 
-    return results;
+    return builder
+      .setMessage('IP lookup completed successfully')
+      .build();
   },
 });
 
@@ -162,31 +152,24 @@ plugin.asyncTransform({
       const domains = await mockAssociatedDomains(ip);
       await job.updateProgress(95, 'Finalizing results...');
 
-      // Build results
-      const results = {
-        entities: [] as any[],
-        edges: [] as any[],
-      };
+      // Build results using ResultBuilder
+      const builder = new ResultBuilder(input);
 
-      // Add domains
+      // Add domains using createEntity
       domains.forEach((domain) => {
-        const domainId = `domain-${domain}`;
-        results.entities.push({
-          type: 'domain',
-          value: domain,
-          properties: {
+        const domainEntity = createEntity('domain', domain, {
+          label: domain,
+          metadata: {
             source: 'reverse-dns',
           },
         });
-        results.edges.push({
-          from: ip,
-          to: domainId,
-          label: 'resolves_to',
+        
+        builder.addEntity(domainEntity, 'resolves to', {
+          relationship: 'dns_resolution',
         });
       });
 
-      // Add comprehensive note
-      const noteId = `note-scan-${ip}`;
+      // Build comprehensive note content
       let content = `## Deep Scan Results for ${ip}\n\n`;
 
       if (reverseDns.length > 0) {
@@ -213,22 +196,24 @@ plugin.asyncTransform({
       content += `**Scan Duration**: ~2 minutes\n`;
       content += `**Organization**: ${orgId}\n`;
 
-      results.entities.push({
-        type: 'note',
-        value: `Deep Scan: ${ip}`,
-        properties: {
+      // Add comprehensive note using createEntity
+      const scanNote = createEntity('note', `Deep Scan: ${ip}`, {
+        label: 'Deep Scan Analysis',
+        metadata: {
           content,
           tags: ['deep-scan', 'security', 'network'],
         },
       });
-      results.edges.push({
-        from: ip,
-        to: noteId,
-        label: 'has_analysis',
+      
+      builder.addEntity(scanNote, 'has analysis', {
+        relationship: 'documentation',
       });
 
       console.log(`[ASYNC] Job ${job.jobId} completed successfully`);
-      return results;
+      
+      return builder
+        .setMessage('Deep scan completed successfully')
+        .build();
     } catch (error) {
       console.error(`[ASYNC] Job ${job.jobId} failed:`, error);
       throw error;
