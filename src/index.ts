@@ -80,6 +80,7 @@ plugin.transform({
     }
 
     // Add informational note using createEntity
+    // NOTE: for "note" entities, we store the actual note body in `label`
     const content = `## IP Information\n\n` +
       `**IP Address**: ${ip}\n` +
       `**Location**: ${ipInfo.location?.city}, ${ipInfo.location?.country}\n` +
@@ -89,9 +90,8 @@ plugin.transform({
       `*Retrieved by IP Lookup Plugin*`;
 
     const note = createEntity('note', `IP Info: ${ip}`, {
-      label: 'IP Information',
+      label: content,
       metadata: {
-        content,
         tags: ['ip-info', 'network'],
       },
     });
@@ -197,10 +197,10 @@ plugin.asyncTransform({
       content += `**Organization**: ${orgId}\n`;
 
       // Add comprehensive note using createEntity
+      // NOTE: for "note" entities, we store the actual note body in `label`
       const scanNote = createEntity('note', `Deep Scan: ${ip}`, {
-        label: 'Deep Scan Analysis',
+        label: content,
         metadata: {
-          content,
           tags: ['deep-scan', 'security', 'network'],
         },
       });
