@@ -19,7 +19,7 @@
   "author": "Relazio Community",
   "license": "MIT",
   "dependencies": {
-    "@relazio/plugin-sdk": "file:vendor/relazio-plugin-sdk-0.3.0-release.tgz",
+    "@relazio/plugin-sdk": "file:vendor/relazio-plugin-sdk-0.3.0-org.tgz",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
