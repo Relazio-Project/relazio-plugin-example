@@ -1,10 +1,9 @@
 node_modules/
 dist/
 .env
-*.log
-.DS_Store
-.vscode/
-.idea/
-coverage/
+data/
 manifest.json
-
+*.log
+*.tgz
+!vendor/*.tgz
+.DS_Store

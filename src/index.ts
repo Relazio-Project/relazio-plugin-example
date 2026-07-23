@@ -6,7 +6,13 @@
  */
 
 import dotenv from 'dotenv';
-import { RelazioPlugin, createEntity, ResultBuilder } from '@relazio/plugin-sdk';
+import {
+  EncryptedFileStorage,
+  InstallationRegistry,
+  RelazioPlugin,
+  createEntity,
+  ResultBuilder,
+} from '@relazio/plugin-sdk';
 import type { TransformInput, JobContext } from '@relazio/plugin-sdk';
 
 // Load environment variables
@@ -16,10 +22,13 @@ dotenv.config();
 // Plugin Configuration
 // ============================================
 
+const PLUGIN_ID = 'ip-lookup-plugin';
+const PLUGIN_VERSION = '1.0.0';
+
 const plugin = new RelazioPlugin({
-  id: 'ip-lookup-plugin',
+  id: PLUGIN_ID,
   name: 'IP Lookup Plugin',
-  version: '1.0.0',
+  version: PLUGIN_VERSION,
   author: 'Relazio Community',
   description: 'Example plugin for IP address analysis with multi-tenant support',
   category: 'network',
@@ -38,9 +47,9 @@ plugin.transform({
   
   async handler(input: TransformInput, config: Record<string, unknown>) {
     const ip = input.entity.value;
-    const orgId = input.organizationId;
+    const workspaceId = input.workspaceId;
     
-    console.log(`[SYNC] Looking up IP ${ip} for org ${orgId}`);
+    console.log(`[SYNC] Looking up IP ${ip} for workspace ${workspaceId}`);
 
     // Mock IP lookup (in production, use real API)
     const ipInfo = await mockIpLookup(ip);
@@ -123,9 +132,11 @@ plugin.asyncTransform({
     job: JobContext
   ) {
     const ip = input.entity.value;
-    const orgId = input.organizationId;
+    const workspaceId = input.workspaceId;
     
-    console.log(`[ASYNC] Deep scan for IP ${ip} (org: ${orgId}, job: ${job.jobId})`);
+    console.log(
+      `[ASYNC] Deep scan for IP ${ip} (workspace: ${workspaceId}, job: ${job.jobId})`
+    );
 
     try {
       // Step 1: Reverse DNS (20% progress)
@@ -194,7 +205,7 @@ plugin.asyncTransform({
       }
 
       content += `**Scan Duration**: ~2 minutes\n`;
-      content += `**Organization**: ${orgId}\n`;
+      content += `**Workspace**: ${workspaceId}\n`;
 
       // Add comprehensive note using createEntity
       // NOTE: for "note" entities, we store the actual note body in `label`
@@ -227,18 +238,46 @@ plugin.asyncTransform({
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0';
+const PUBLIC_URL =
+  process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+const INSTALLATION_TOKEN = process.env.ADDON_INSTALL_TOKEN;
+const STORAGE_ENCRYPTION_KEY = process.env.ADDON_STORAGE_ENCRYPTION_KEY;
+const STORAGE_PATH =
+  process.env.ADDON_STORAGE_PATH || './data/installations.enc';
+
+if (!INSTALLATION_TOKEN || INSTALLATION_TOKEN.length < 32) {
+  throw new Error(
+    'ADDON_INSTALL_TOKEN must be configured with at least 32 characters'
+  );
+}
+if (!STORAGE_ENCRYPTION_KEY || STORAGE_ENCRYPTION_KEY.length < 32) {
+  throw new Error(
+    'ADDON_STORAGE_ENCRYPTION_KEY must be configured with at least 32 characters'
+  );
+}
+
+plugin.enableMultiTenant(
+  new InstallationRegistry(
+    PLUGIN_ID,
+    PLUGIN_VERSION,
+    new EncryptedFileStorage(STORAGE_PATH, STORAGE_ENCRYPTION_KEY)
+  )
+);
 
 (async () => {
   try {
     await plugin.start({
       port: PORT,
       host: HOST,
-      multiTenant: true, // ← Enable multi-tenant support with in-memory registry
+      publicUrl: PUBLIC_URL,
+      multiTenant: true,
+      installationToken: INSTALLATION_TOKEN,
+      adminToken: process.env.ADDON_ADMIN_TOKEN,
     });
 
     console.log('\n🎉 Multi-tenant plugin ready!');
-    console.log(`   Organizations can install this plugin via:`);
-    console.log(`   http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/manifest.json\n`);
+    console.log('   Install with the personalized manifest URL:');
+    console.log(`   ${PUBLIC_URL}/manifest.json?installToken=<ADDON_INSTALL_TOKEN>\n`);
   } catch (error) {
     console.error('❌ Failed to start plugin:', error);
     process.exit(1);
@@ -297,4 +336,3 @@ async function mockAssociatedDomains(ip: string): Promise<string[]> {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-

@@ -1,0 +1,20 @@
+services:
+  addon:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL to the public addon origin}
+      ADDON_INSTALL_TOKEN: ${ADDON_INSTALL_TOKEN:?Set ADDON_INSTALL_TOKEN}
+      ADDON_ADMIN_TOKEN: ${ADDON_ADMIN_TOKEN:-}
+      ADDON_STORAGE_ENCRYPTION_KEY: ${ADDON_STORAGE_ENCRYPTION_KEY:?Set ADDON_STORAGE_ENCRYPTION_KEY}
+      ADDON_STORAGE_PATH: /app/data/installations.enc
+    ports:
+      - "127.0.0.1:${ADDON_PORT:-3001}:3001"
+    volumes:
+      - addon-data:/app/data
+
+volumes:
+  addon-data:
